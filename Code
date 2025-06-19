@@ -1,6 +1,7 @@
 import argparse
 import yaml
 import sys
+import os
 
 def parse_resource_string(res_str):
     """Parses strings like 'cpu=100m,memory=64Mi' into a dict."""
@@ -10,6 +11,70 @@ def parse_resource_string(res_str):
             k, v = res.split("=", 1)
             result[k.strip()] = v.strip()
     return result
+
+def parse_env_string(env_str):
+    """Parses VAR1=val1,VAR2=val2 into a list of dicts."""
+    result = []
+    for pair in env_str.split(","):
+        if "=" in pair:
+            k, v = pair.split("=", 1)
+            result.append({"name": k.strip(), "value": v.strip()})
+    return result
+
+def parse_ports_string(ports_str):
+    """Parses 80,443,8080/tcp into a list of containerPort dicts."""
+    result = []
+    for port in ports_str.split(","):
+        port = port.strip()
+        if not port:
+            continue
+        if "/" in port:
+            p, proto = port.split("/", 1)
+            result.append({"containerPort": int(p), "protocol": proto.upper()})
+        else:
+            result.append({"containerPort": int(port)})
+    return result
+
+def parse_volume_mounts_string(vm_str):
+    """Parses mountPath=/data,name=datavol into a dict."""
+    # Accepts comma-separated key=value pairs, can be repeated
+    parts = vm_str.split(",")
+    d = {}
+    for part in parts:
+        if "=" in part:
+            k, v = part.split("=", 1)
+            d[k.strip()] = v.strip()
+    return d
+
+def parse_volume_string(vol_str):
+    """
+    Example: name=datavol,type=emptyDir
+             name=cmvol,type=configMap,configMapName=mycm
+             name=secretvol,type=secret,secretName=mysecret
+             name=hpvol,type=hostPath,path=/tmp,hostPathType=Directory
+    """
+    parts = vol_str.split(",")
+    d = {}
+    for part in parts:
+        if "=" in part:
+            k, v = part.split("=", 1)
+            d[k.strip()] = v.strip()
+    vol = {"name": d.get("name")}
+    t = d.get("type")
+    if t == "emptyDir":
+        vol["emptyDir"] = {}
+    elif t == "configMap":
+        vol["configMap"] = {"name": d.get("configMapName")}
+    elif t == "secret":
+        vol["secret"] = {"secretName": d.get("secretName")}
+    elif t == "hostPath":
+        hostPath = {"path": d.get("path")}
+        if "hostPathType" in d:
+            hostPath["type"] = d["hostPathType"]
+        vol["hostPath"] = hostPath
+    else:
+        vol["emptyDir"] = {}
+    return vol
 
 def parse_container_arg(container_arg):
     # Parses key=value pairs separated by commas
@@ -23,6 +88,14 @@ def parse_container_arg(container_arg):
         "name": data.get("name"),
         "image": data.get("image"),
     }
+    if "command" in data:
+        container["command"] = data["command"].split()
+    if "args" in data:
+        container["args"] = data["args"].split()
+    if "ports" in data:
+        container["ports"] = parse_ports_string(data["ports"])
+    if "env" in data:
+        container["env"] = parse_env_string(data["env"])
     resources = {}
     requests = {}
     limits = {}
@@ -48,6 +121,23 @@ def parse_container_arg(container_arg):
     if resources:
         container["resources"] = resources
 
+    if "volumeMounts" in data:
+        # volumeMounts=mountPath=/data,name=datavol;mountPath=/cache,name=cachevol
+        vms = []
+        for vm in data["volumeMounts"].split(";"):
+            vmd = parse_volume_mounts_string(vm)
+            if vmd:
+                vms.append(vmd)
+        if vms:
+            container["volumeMounts"] = vms
+
+    if "stdin" in data and data["stdin"].lower() == "true":
+        container["stdin"] = True
+    if "tty" in data and data["tty"].lower() == "true":
+        container["tty"] = True
+    if "workingDir" in data:
+        container["workingDir"] = data["workingDir"]
+
     return container
 
 def merge_resources(target, default):
@@ -66,7 +156,47 @@ def merge_resources(target, default):
                         target[key][res_type] = default[key][res_type]
     return target
 
-def generate_pod_yaml(pod_name, containers, global_resources):
+def parse_tolerations(tol_str):
+    # key=dedicated,value=db,effect=NoSchedule;key=...,value=...,effect=...
+    tlist = []
+    for t in tol_str.split(";"):
+        td = {}
+        for kv in t.split(","):
+            if "=" in kv:
+                k, v = kv.split("=", 1)
+                td[k.strip()] = v.strip()
+        if td:
+            tlist.append(td)
+    return tlist
+
+def parse_affinity(aff_str):
+    # Example: nodeAffinity=requiredDuringSchedulingIgnoredDuringExecution,key=disktype,operator=In,values=ssd
+    # This is complex; recommend passing a yaml/json file for production, but basic support here
+    try:
+        import json
+        return json.loads(aff_str)
+    except Exception:
+        return {}
+
+def parse_labels(lab_str):
+    # key1=val1,key2=val2
+    return dict(parse_resource_string(lab_str))
+
+def parse_annotations(ann_str):
+    return dict(parse_resource_string(ann_str))
+
+def parse_image_pull_secrets(ips_str):
+    # mysecret1,mysecret2
+    return [{"name": n.strip()} for n in ips_str.split(",") if n.strip()]
+
+def parse_security_context(sc_str):
+    try:
+        import json
+        return json.loads(sc_str)
+    except Exception:
+        return {}
+
+def generate_pod_yaml(args, containers, global_resources, volumes):
     # Apply global resources to containers missing them
     updated_containers = []
     for c in containers:
@@ -81,62 +211,107 @@ def generate_pod_yaml(pod_name, containers, global_resources):
         "apiVersion": "v1",
         "kind": "Pod",
         "metadata": {
-            "name": pod_name
+            "name": args.pod_name
         },
         "spec": {
             "containers": updated_containers
         }
     }
+
+    if volumes:
+        pod["spec"]["volumes"] = volumes
+
+    if args.restart_policy:
+        pod["spec"]["restartPolicy"] = args.restart_policy
+    if args.node_selector:
+        pod["spec"]["nodeSelector"] = parse_labels(args.node_selector)
+    if args.affinity:
+        pod["spec"]["affinity"] = parse_affinity(args.affinity)
+    if args.tolerations:
+        pod["spec"]["tolerations"] = parse_tolerations(args.tolerations)
+    if args.labels:
+        pod["metadata"]["labels"] = parse_labels(args.labels)
+    if args.annotations:
+        pod["metadata"]["annotations"] = parse_annotations(args.annotations)
+    if args.service_account:
+        pod["spec"]["serviceAccountName"] = args.service_account
+    if args.host_network:
+        pod["spec"]["hostNetwork"] = True
+    if args.dns_policy:
+        pod["spec"]["dnsPolicy"] = args.dns_policy
+    if args.image_pull_secrets:
+        pod["spec"]["imagePullSecrets"] = parse_image_pull_secrets(args.image_pull_secrets)
+    if args.security_context:
+        pod["spec"]["securityContext"] = parse_security_context(args.security_context)
+
     return pod
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Convert 'kubectl run' (with custom flags, including multiple containers) to YAML manifest"
+        description="Imperative-to-YAML: Generate Kubernetes Pod YAML from imperative-style flags"
     )
-    parser.add_argument(
-        "cmd",
-        nargs=argparse.REMAINDER,
-        help="The kubectl run command after 'kubectl' (e.g. run mypod ...)"
-    )
+    parser.add_argument("run", help="run (required)", nargs=1)
+    parser.add_argument("pod_name", help="Pod name")
+    parser.add_argument("--container", action="append", help="Container spec as key=val pairs. Required. (repeatable)")
+    parser.add_argument("--volume", action="append", help="Volume spec as key=val pairs (repeatable)")
+    parser.add_argument("--restart-policy", dest="restart_policy", help="Pod restartPolicy (Always, OnFailure, Never)")
+    parser.add_argument("--node-selector", help="Pod nodeSelector, key1=val1,key2=val2")
+    parser.add_argument("--affinity", help="Affinity (pass as JSON string)")
+    parser.add_argument("--tolerations", help='Tolerations, "key=dedicated,value=db,effect=NoSchedule;..."')
+    parser.add_argument("--labels", help="Pod labels, key1=val1,key2=val2")
+    parser.add_argument("--annotations", help="Pod annotations, key1=val1,key2=val2")
+    parser.add_argument("--service-account", help="Pod serviceAccountName")
+    parser.add_argument("--host-network", action="store_true", help="Enable hostNetwork: true")
+    parser.add_argument("--dns-policy", help="Pod dnsPolicy")
+    parser.add_argument("--image-pull-secrets", help="Comma-separated list of imagePullSecret names")
+    parser.add_argument("--security-context", help="Pod securityContext (JSON string)")
+
+    # Global resources for all containers
+    parser.add_argument("--requests", help="Global resource requests, cpu=100m,memory=64Mi")
+    parser.add_argument("--limits", help="Global resource limits, cpu=100m,memory=64Mi")
+    parser.add_argument("--requests-memory", help="Global resource requests memory")
+    parser.add_argument("--requests-cpu", help="Global resource requests cpu")
+    parser.add_argument("--limits-memory", help="Global resource limits memory")
+    parser.add_argument("--limits-cpu", help="Global resource limits cpu")
+
     args = parser.parse_args()
-    if not args.cmd or args.cmd[0] != "run":
-        print("Please start the command with 'run <pod-name>'", file=sys.stderr)
-        sys.exit(1)
-    if len(args.cmd) < 2:
-        print("Pod name is required (e.g. run mypod ...)", file=sys.stderr)
+
+    if not args.container:
+        print("At least one --container=... argument is required.", file=sys.stderr)
         sys.exit(1)
 
-    pod_name = args.cmd[1]
     containers = []
+    for cstr in args.container:
+        c = parse_container_arg(cstr)
+        if not c.get("name") or not c.get("image"):
+            print("Each --container must specify name=<name> and image=<image>", file=sys.stderr)
+            sys.exit(1)
+        containers.append(c)
+
+    volumes = []
+    if args.volume:
+        for vstr in args.volume:
+            v = parse_volume_string(vstr)
+            if not v.get("name"):
+                print("Each --volume must specify name=<name>", file=sys.stderr)
+                sys.exit(1)
+            volumes.append(v)
+
+    # Global resources
     global_requests = {}
     global_limits = {}
-    i = 2
-    while i < len(args.cmd):
-        arg = args.cmd[i]
-        if arg.startswith("--container="):
-            container_arg = arg[len("--container="):]
-            container = parse_container_arg(container_arg)
-            if not container.get("name") or not container.get("image"):
-                print("Each --container must specify name=<name> and image=<image>", file=sys.stderr)
-                sys.exit(1)
-            containers.append(container)
-        elif arg.startswith("--requests="):
-            global_requests.update(parse_resource_string(arg[len("--requests="):]))
-        elif arg.startswith("--limits="):
-            global_limits.update(parse_resource_string(arg[len("--limits="):]))
-        elif arg.startswith("--requests-memory="):
-            global_requests["memory"] = arg[len("--requests-memory="):]
-        elif arg.startswith("--requests-cpu="):
-            global_requests["cpu"] = arg[len("--requests-cpu="):]
-        elif arg.startswith("--limits-memory="):
-            global_limits["memory"] = arg[len("--limits-memory="):]
-        elif arg.startswith("--limits-cpu="):
-            global_limits["cpu"] = arg[len("--limits-cpu="):]
-        i += 1
-
-    if not containers:
-        print("At least one --container=name=<name>,image=<image>,... flag is required.", file=sys.stderr)
-        sys.exit(1)
+    if args.requests:
+        global_requests.update(parse_resource_string(args.requests))
+    if args.limits:
+        global_limits.update(parse_resource_string(args.limits))
+    if args.requests_memory:
+        global_requests["memory"] = args.requests_memory
+    if args.requests_cpu:
+        global_requests["cpu"] = args.requests_cpu
+    if args.limits_memory:
+        global_limits["memory"] = args.limits_memory
+    if args.limits_cpu:
+        global_limits["cpu"] = args.limits_cpu
 
     global_resources = {}
     if global_requests:
@@ -144,7 +319,7 @@ def main():
     if global_limits:
         global_resources["limits"] = global_limits
 
-    pod_yaml = generate_pod_yaml(pod_name, containers, global_resources)
+    pod_yaml = generate_pod_yaml(args, containers, global_resources, volumes)
     print("# YAML manifest generated from imperative command:")
     print(yaml.dump(pod_yaml, sort_keys=False))
 
