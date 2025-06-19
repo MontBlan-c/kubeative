@@ -1,72 +1,81 @@
-
 import argparse
 import yaml
 import sys
-import re
 
-def parse_kubectl_run(cmd_args):
-    # Only basic parsing: expects the command to look like: k run <pod> --image=img [other-flags]
-    pod_name = None
-    image = None
-    rest_args = []
-    i = 0
-    while i < len(cmd_args):
-        arg = cmd_args[i]
-        if arg == "run" and i + 1 < len(cmd_args):
-            pod_name = cmd_args[i+1]
-            i += 2
-        elif arg.startswith("--image="):
-            image = arg.split("=", 1)[1]
-            i += 1
-        elif arg == "--image" and i + 1 < len(cmd_args):
-            image = cmd_args[i+1]
-            i += 2
-        else:
-            rest_args.append(arg)
-            i += 1
-    return pod_name, image, rest_args
+def parse_resource_string(res_str):
+    """Parses strings like 'cpu=100m,memory=64Mi' into a dict."""
+    result = {}
+    for res in res_str.split(","):
+        if "=" in res:
+            k, v = res.split("=", 1)
+            result[k.strip()] = v.strip()
+    return result
 
-def extract_resources(rest_args):
-    # Accepts both --requests-memory=64Mi and --limits-memory=128Mi convenience flags
-    # As well as --requests=memory=64Mi,cpu=100m and --limits=memory=128Mi,cpu=200m
-    requests = {}
-    limits = {}
-    new_rest = []
-    for arg in rest_args:
-        if arg.startswith("--requests-memory="):
-            requests["memory"] = arg.split("=", 1)[1]
-        elif arg.startswith("--limits-memory="):
-            limits["memory"] = arg.split("=", 1)[1]
-        elif arg.startswith("--requests-cpu="):
-            requests["cpu"] = arg.split("=", 1)[1]
-        elif arg.startswith("--limits-cpu="):
-            limits["cpu"] = arg.split("=", 1)[1]
-        elif arg.startswith("--requests="):
-            res = arg.split("=", 1)[1]
-            for r in res.split(","):
-                k, v = r.split("=", 1)
-                requests[k.strip()] = v.strip()
-        elif arg.startswith("--limits="):
-            res = arg.split("=", 1)[1]
-            for r in res.split(","):
-                k, v = r.split("=", 1)
-                limits[k.strip()] = v.strip()
-        else:
-            new_rest.append(arg)
-    return requests if requests else None, limits if limits else None, new_rest
-
-def generate_pod_yaml(pod_name, image, requests, limits):
+def parse_container_arg(container_arg):
+    # Parses key=value pairs separated by commas
+    parts = container_arg.split(",")
+    data = {}
+    for part in parts:
+        if "=" in part:
+            k, v = part.split("=", 1)
+            data[k.strip()] = v.strip()
     container = {
-        "name": pod_name,
-        "image": image,
+        "name": data.get("name"),
+        "image": data.get("image"),
     }
     resources = {}
+    requests = {}
+    limits = {}
+
+    if "requests-memory" in data:
+        requests["memory"] = data["requests-memory"]
+    if "requests-cpu" in data:
+        requests["cpu"] = data["requests-cpu"]
+    if "requests" in data:
+        requests.update(parse_resource_string(data["requests"]))
     if requests:
         resources["requests"] = requests
+
+    if "limits-memory" in data:
+        limits["memory"] = data["limits-memory"]
+    if "limits-cpu" in data:
+        limits["cpu"] = data["limits-cpu"]
+    if "limits" in data:
+        limits.update(parse_resource_string(data["limits"]))
     if limits:
         resources["limits"] = limits
+
     if resources:
         container["resources"] = resources
+
+    return container
+
+def merge_resources(target, default):
+    """Add any missing resources from default into target."""
+    if not default:
+        return target
+    if not target:
+        return default
+    for key in ["requests", "limits"]:
+        if key in default:
+            if key not in target:
+                target[key] = default[key]
+            else:
+                for res_type in default[key]:
+                    if res_type not in target[key]:
+                        target[key][res_type] = default[key][res_type]
+    return target
+
+def generate_pod_yaml(pod_name, containers, global_resources):
+    # Apply global resources to containers missing them
+    updated_containers = []
+    for c in containers:
+        c = c.copy()
+        if "resources" in c:
+            c["resources"] = merge_resources(c["resources"], global_resources)
+        elif global_resources:
+            c["resources"] = global_resources
+        updated_containers.append(c)
 
     pod = {
         "apiVersion": "v1",
@@ -75,34 +84,67 @@ def generate_pod_yaml(pod_name, image, requests, limits):
             "name": pod_name
         },
         "spec": {
-            "containers": [container]
+            "containers": updated_containers
         }
     }
     return pod
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Convert 'kubectl run' (with custom flags) to YAML manifest"
+        description="Convert 'kubectl run' (with custom flags, including multiple containers) to YAML manifest"
     )
     parser.add_argument(
-        "kubectl_args",
+        "cmd",
         nargs=argparse.REMAINDER,
-        help="The kubectl run command after 'kubectl' (e.g. run mypod --image=nginx ...)"
+        help="The kubectl run command after 'kubectl' (e.g. run mypod ...)"
     )
     args = parser.parse_args()
-    if not args.kubectl_args or args.kubectl_args[0] != "run":
-        print("Please start the command with 'run <pod-name> --image=<image>'", file=sys.stderr)
+    if not args.cmd or args.cmd[0] != "run":
+        print("Please start the command with 'run <pod-name>'", file=sys.stderr)
+        sys.exit(1)
+    if len(args.cmd) < 2:
+        print("Pod name is required (e.g. run mypod ...)", file=sys.stderr)
         sys.exit(1)
 
-    pod_name, image, rest_args = parse_kubectl_run(args.kubectl_args)
-    if not pod_name or not image:
-        print("Pod name and image are required (e.g. run mypod --image=nginx)", file=sys.stderr)
+    pod_name = args.cmd[1]
+    containers = []
+    global_requests = {}
+    global_limits = {}
+    i = 2
+    while i < len(args.cmd):
+        arg = args.cmd[i]
+        if arg.startswith("--container="):
+            container_arg = arg[len("--container="):]
+            container = parse_container_arg(container_arg)
+            if not container.get("name") or not container.get("image"):
+                print("Each --container must specify name=<name> and image=<image>", file=sys.stderr)
+                sys.exit(1)
+            containers.append(container)
+        elif arg.startswith("--requests="):
+            global_requests.update(parse_resource_string(arg[len("--requests="):]))
+        elif arg.startswith("--limits="):
+            global_limits.update(parse_resource_string(arg[len("--limits="):]))
+        elif arg.startswith("--requests-memory="):
+            global_requests["memory"] = arg[len("--requests-memory="):]
+        elif arg.startswith("--requests-cpu="):
+            global_requests["cpu"] = arg[len("--requests-cpu="):]
+        elif arg.startswith("--limits-memory="):
+            global_limits["memory"] = arg[len("--limits-memory="):]
+        elif arg.startswith("--limits-cpu="):
+            global_limits["cpu"] = arg[len("--limits-cpu="):]
+        i += 1
+
+    if not containers:
+        print("At least one --container=name=<name>,image=<image>,... flag is required.", file=sys.stderr)
         sys.exit(1)
 
-    requests, limits, other_args = extract_resources(rest_args)
+    global_resources = {}
+    if global_requests:
+        global_resources["requests"] = global_requests
+    if global_limits:
+        global_resources["limits"] = global_limits
 
-    pod_yaml = generate_pod_yaml(pod_name, image, requests, limits)
-
+    pod_yaml = generate_pod_yaml(pod_name, containers, global_resources)
     print("# YAML manifest generated from imperative command:")
     print(yaml.dump(pod_yaml, sort_keys=False))
 
