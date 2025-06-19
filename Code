@@ -1,1 +1,110 @@
 
+import argparse
+import yaml
+import sys
+import re
+
+def parse_kubectl_run(cmd_args):
+    # Only basic parsing: expects the command to look like: k run <pod> --image=img [other-flags]
+    pod_name = None
+    image = None
+    rest_args = []
+    i = 0
+    while i < len(cmd_args):
+        arg = cmd_args[i]
+        if arg == "run" and i + 1 < len(cmd_args):
+            pod_name = cmd_args[i+1]
+            i += 2
+        elif arg.startswith("--image="):
+            image = arg.split("=", 1)[1]
+            i += 1
+        elif arg == "--image" and i + 1 < len(cmd_args):
+            image = cmd_args[i+1]
+            i += 2
+        else:
+            rest_args.append(arg)
+            i += 1
+    return pod_name, image, rest_args
+
+def extract_resources(rest_args):
+    # Accepts both --requests-memory=64Mi and --limits-memory=128Mi convenience flags
+    # As well as --requests=memory=64Mi,cpu=100m and --limits=memory=128Mi,cpu=200m
+    requests = {}
+    limits = {}
+    new_rest = []
+    for arg in rest_args:
+        if arg.startswith("--requests-memory="):
+            requests["memory"] = arg.split("=", 1)[1]
+        elif arg.startswith("--limits-memory="):
+            limits["memory"] = arg.split("=", 1)[1]
+        elif arg.startswith("--requests-cpu="):
+            requests["cpu"] = arg.split("=", 1)[1]
+        elif arg.startswith("--limits-cpu="):
+            limits["cpu"] = arg.split("=", 1)[1]
+        elif arg.startswith("--requests="):
+            res = arg.split("=", 1)[1]
+            for r in res.split(","):
+                k, v = r.split("=", 1)
+                requests[k.strip()] = v.strip()
+        elif arg.startswith("--limits="):
+            res = arg.split("=", 1)[1]
+            for r in res.split(","):
+                k, v = r.split("=", 1)
+                limits[k.strip()] = v.strip()
+        else:
+            new_rest.append(arg)
+    return requests if requests else None, limits if limits else None, new_rest
+
+def generate_pod_yaml(pod_name, image, requests, limits):
+    container = {
+        "name": pod_name,
+        "image": image,
+    }
+    resources = {}
+    if requests:
+        resources["requests"] = requests
+    if limits:
+        resources["limits"] = limits
+    if resources:
+        container["resources"] = resources
+
+    pod = {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "metadata": {
+            "name": pod_name
+        },
+        "spec": {
+            "containers": [container]
+        }
+    }
+    return pod
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Convert 'kubectl run' (with custom flags) to YAML manifest"
+    )
+    parser.add_argument(
+        "kubectl_args",
+        nargs=argparse.REMAINDER,
+        help="The kubectl run command after 'kubectl' (e.g. run mypod --image=nginx ...)"
+    )
+    args = parser.parse_args()
+    if not args.kubectl_args or args.kubectl_args[0] != "run":
+        print("Please start the command with 'run <pod-name> --image=<image>'", file=sys.stderr)
+        sys.exit(1)
+
+    pod_name, image, rest_args = parse_kubectl_run(args.kubectl_args)
+    if not pod_name or not image:
+        print("Pod name and image are required (e.g. run mypod --image=nginx)", file=sys.stderr)
+        sys.exit(1)
+
+    requests, limits, other_args = extract_resources(rest_args)
+
+    pod_yaml = generate_pod_yaml(pod_name, image, requests, limits)
+
+    print("# YAML manifest generated from imperative command:")
+    print(yaml.dump(pod_yaml, sort_keys=False))
+
+if __name__ == "__main__":
+    main()
