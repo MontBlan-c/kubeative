@@ -1,28 +1,34 @@
 import sys
 import yaml
+import os
 
-def load_fields():
-    with open("pod-spec-fields.yaml") as f:
-        return yaml.safe_load(f)
+def load_fields(filename="pod-spec-fields.yaml"):
+    if not os.path.exists(filename):
+        print(f"Error: {filename} not found.")
+        sys.exit(1)
+    with open(filename, encoding="utf-8") as f:
+        try:
+            return yaml.safe_load(f)
+        except yaml.YAMLError as e:
+            print(f"Error parsing {filename}: {e}")
+            sys.exit(1)
 
 def search(term, fields):
     term = term.lower()
     results = []
     for field, data in fields.items():
-        # Search field name
         if term in field.lower():
             results.append((field, data))
             continue
-        # Search description (case-insensitive, partial match)
         if 'description' in data and term in data['description'].lower():
             results.append((field, data))
     return results
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: k search <field or description keyword>")
+        print("Usage: python3 k_search.py <field or description keyword>")
         sys.exit(1)
-    term = " ".join(sys.argv[1:])
+    term = " ".join(sys.argv[1:]).strip()
     fields = load_fields()
     results = search(term, fields)
     if not results:
@@ -30,7 +36,7 @@ if __name__ == "__main__":
     else:
         for field, data in results:
             print(f"\033[1mField: {field}\033[0m")
-            print(f"Description: {data['description']}\n")
+            print(f"Description: {data.get('description','No description available.')}\n")
             print("Sample YAML:\n")
-            print(data['sample'])
+            print(data.get('sample', 'No sample available.').strip())
             print('-' * 60)
