@@ -26,7 +26,7 @@ def search(term, fields):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python3 k_search.py <field or description keyword>")
+        print("Usage: python3 search.py <field or description keyword>")
         sys.exit(1)
     term = " ".join(sys.argv[1:]).strip()
     fields = load_fields()
