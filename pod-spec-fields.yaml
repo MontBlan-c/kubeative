@@ -1,102 +1,18 @@
-namespace:
-  description: Namespace to deploy the Pod into. Namespaces help with multi-tenancy and resource organization.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-      namespace: custom-namespace
-    spec:
-      containers:
-        - name: my-container
-          image: nginx
-
-labels:
-  description: Key-value pairs for organizing and selecting the Pod; used for selectors, grouping, and searching.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-      labels:
-        app: web
-        tier: backend
-    spec:
-      containers:
-        - name: my-container
-          image: nginx
-
-annotations:
-  description: Arbitrary key-value metadata for a Pod; used by tools and libraries for custom info.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-      annotations:
-        description: "Pod for demonstration"
-        owner: "devops-team"
-    spec:
-      containers:
-        - name: my-container
-          image: nginx
-
-serviceAccountName:
-  description: Specifies the service account to use for the Pod. Controls access to the Kubernetes API.
+activeDeadlineSeconds:
+  description: The duration in seconds the Pod may be active before the system tries to terminate it.
   sample: |
     apiVersion: v1
     kind: Pod
     metadata:
       name: my-pod
     spec:
-      serviceAccountName: my-service-account
-      containers:
-        - name: my-container
-          image: nginx
-
-automountServiceAccountToken:
-  description: Controls whether a service account token is automatically mounted for the Pod.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      automountServiceAccountToken: false
-      containers:
-        - name: my-container
-          image: nginx
-
-restartPolicy:
-  description: Controls the restart behavior of containers in the Pod. Allowed values: Always, OnFailure, Never.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      restartPolicy: OnFailure
-      containers:
-        - name: my-container
-          image: nginx
-
-nodeSelector:
-  description: Map of key-value pairs for scheduling the Pod onto nodes with matching labels.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      nodeSelector:
-        disktype: ssd
-        zone: us-east-1a
+      activeDeadlineSeconds: 3600
       containers:
         - name: my-container
           image: nginx
 
 affinity:
-  description: Advanced node/pod affinity and anti-affinity rules for pod scheduling.
+  description: Node/pod affinity and anti-affinity scheduling rules.
   sample: |
     apiVersion: v1
     kind: Pod
@@ -115,130 +31,30 @@ affinity:
         podAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
-                matchExpressions:
-                  - key: security
-                    operator: In
-                    values:
-                      - S1
-              topologyKey: failure-domain.beta.kubernetes.io/zone
+                matchLabels:
+                  app: web
+              topologyKey: kubernetes.io/hostname
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: web
+                topologyKey: kubernetes.io/hostname
       containers:
         - name: my-container
           image: nginx
 
-tolerations:
-  description: List of node taints this Pod will tolerate for scheduling.
+automountServiceAccountToken:
+  description: Controls whether a service account token is automatically mounted for the Pod.
   sample: |
     apiVersion: v1
     kind: Pod
     metadata:
       name: my-pod
     spec:
-      tolerations:
-        - key: dedicated
-          operator: Equal
-          value: gpu
-          effect: NoSchedule
-      containers:
-        - name: my-container
-          image: nginx
-
-hostNetwork:
-  description: If true, the Pod will use the node's network namespace instead of a separate one.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      hostNetwork: true
-      containers:
-        - name: my-container
-          image: nginx
-
-hostPID:
-  description: If true, use the host’s process namespace.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      hostPID: true
-      containers:
-        - name: my-container
-          image: nginx
-
-hostIPC:
-  description: If true, use the host’s IPC namespace.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      hostIPC: true
-      containers:
-        - name: my-container
-          image: nginx
-
-dnsPolicy:
-  description: Sets the DNS policy for the Pod. Allowed values: ClusterFirst, Default, None, ClusterFirstWithHostNet.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      dnsPolicy: ClusterFirst
-      containers:
-        - name: my-container
-          image: nginx
-
-dnsConfig:
-  description: Custom DNS configuration for the Pod, overrides some DNSPolicy defaults.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      dnsConfig:
-        nameservers:
-          - 1.1.1.1
-        searches:
-          - custom.svc.cluster.local
-        options:
-          - name: ndots
-            value: "2"
-      containers:
-        - name: my-container
-          image: nginx
-
-imagePullSecrets:
-  description: List of secret names to use for pulling private container images.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      imagePullSecrets:
-        - name: my-registry-secret
-      containers:
-        - name: my-container
-          image: nginx
-
-securityContext:
-  description: Pod-level security settings; controls things like user/group IDs, SELinux, fsGroup, etc.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      securityContext:
-        runAsUser: 1000
-        fsGroup: 2000
+      automountServiceAccountToken: false
       containers:
         - name: my-container
           image: nginx
@@ -276,8 +92,153 @@ containers:
           image: busybox
           command: ["sleep", "3600"]
 
+dnsConfig:
+  description: Custom DNS configuration for the Pod, overrides some DNSPolicy defaults.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      dnsConfig:
+        nameservers:
+          - 1.1.1.1
+        searches:
+          - custom.svc.cluster.local
+        options:
+          - name: ndots
+            value: "2"
+      containers:
+        - name: my-container
+          image: nginx
+
+dnsPolicy:
+  description: Sets the DNS policy for the Pod. Allowed values: ClusterFirst, Default, None, ClusterFirstWithHostNet.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      dnsPolicy: ClusterFirst
+      containers:
+        - name: my-container
+          image: nginx
+
+enableServiceLinks:
+  description: Controls whether environment variables for services are injected into the Pod.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: my-container
+          image: nginx
+
+ephemeralContainers:
+  description: List of ephemeral containers for debugging.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      containers:
+        - name: main
+          image: nginx
+      ephemeralContainers:
+        - name: debugger
+          image: busybox
+          command: ["sh"]
+
+hostAliases:
+  description: Custom host-to-IP mappings injected into the Pod's /etc/hosts file.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      hostAliases:
+        - ip: "127.0.0.1"
+          hostnames:
+            - "local.dev"
+            - "test.dev"
+      containers:
+        - name: my-container
+          image: nginx
+
+hostIPC:
+  description: If true, use the host’s IPC namespace.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      hostIPC: true
+      containers:
+        - name: my-container
+          image: nginx
+
+hostNetwork:
+  description: If true, the Pod will use the node's network namespace instead of a separate one.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      hostNetwork: true
+      containers:
+        - name: my-container
+          image: nginx
+
+hostPID:
+  description: If true, use the host’s process namespace.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      hostPID: true
+      containers:
+        - name: my-container
+          image: nginx
+
+hostname:
+  description: Sets the Pod's hostname in the cluster.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      hostname: custom-host
+      containers:
+        - name: my-container
+          image: nginx
+
+imagePullSecrets:
+  description: List of secret names to use for pulling private container images.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      imagePullSecrets:
+        - name: my-registry-secret
+      containers:
+        - name: my-container
+          image: nginx
+
 initContainers:
-  description: Containers that run before app containers and must complete successfully before the Pod is "Ready".
+  description: List of init containers to run before app containers.
   sample: |
     apiVersion: v1
     kind: Pod
@@ -292,18 +253,312 @@ initContainers:
         - name: main
           image: nginx
 
-ephemeralContainers:
-  description: Temporary containers used for troubleshooting running Pods (not restarted with the Pod).
+labels:
+  description: Key-value pairs for organizing and selecting the Pod; used for selectors, grouping, and searching.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+      labels:
+        app: web
+        tier: backend
+    spec:
+      containers:
+        - name: my-container
+          image: nginx
+
+metadata:
+  description: Standard object's metadata; includes name, namespace, labels, annotations, etc.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+      namespace: my-namespace
+      labels:
+        app: my-app
+      annotations:
+        description: "test pod"
+    spec:
+      containers:
+        - name: my-container
+          image: nginx
+
+nodeName:
+  description: Schedules the Pod onto the node with this name.
   sample: |
     apiVersion: v1
     kind: Pod
     metadata:
       name: my-pod
     spec:
-      ephemeralContainers:
-        - name: debugger
-          image: busybox
-          command: ["sh"]
+      nodeName: worker-node-1
+      containers:
+        - name: my-container
+          image: nginx
+
+nodeSelector:
+  description: Map of key-value pairs for scheduling the Pod onto nodes with matching labels.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      nodeSelector:
+        disktype: ssd
+        zone: us-east-1a
+      containers:
+        - name: my-container
+          image: nginx
+
+os:
+  description: Specify the operating system for the Pod, e.g., linux or windows.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      os:
+        name: linux
+      containers:
+        - name: my-container
+          image: nginx
+
+overhead:
+  description: Resource overhead associated with running a Pod (set by the RuntimeClass).
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      overhead:
+        cpu: "100m"
+        memory: "50Mi"
+      containers:
+        - name: my-container
+          image: nginx
+
+preemptionPolicy:
+  description: Specifies the Pod's preemption policy. Allowed values: PreemptLowerPriority, Never.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      preemptionPolicy: PreemptLowerPriority
+      containers:
+        - name: my-container
+          image: nginx
+
+priority:
+  description: The integer value of the priority for this Pod.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      priority: 1000000
+      containers:
+        - name: my-container
+          image: nginx
+
+priorityClassName:
+  description: Assigns a priority class to the Pod for scheduling and eviction.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      priorityClassName: high-priority
+      containers:
+        - name: my-container
+          image: nginx
+
+readinessGates:
+  description: List of custom Pod readiness conditions.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      readinessGates:
+        - conditionType: "example.com/CustomReady"
+      containers:
+        - name: my-container
+          image: nginx
+
+restartPolicy:
+  description: Controls the restart behavior of containers in the Pod. Allowed values: Always, OnFailure, Never.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: my-container
+          image: nginx
+
+runtimeClassName:
+  description: Specifies the container runtime class for the Pod (e.g., for using gVisor or Kata).
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      runtimeClassName: kata-containers
+      containers:
+        - name: my-container
+          image: nginx
+
+schedulerName:
+  description: Name of the scheduler to dispatch this Pod, defaults to "default-scheduler".
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      schedulerName: custom-scheduler
+      containers:
+        - name: my-container
+          image: nginx
+
+securityContext:
+  description: Pod-level security settings; controls things like user/group IDs, SELinux, fsGroup, etc.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      securityContext:
+        runAsUser: 1000
+        fsGroup: 2000
+      containers:
+        - name: my-container
+          image: nginx
+
+serviceAccount:
+  description: Name of the ServiceAccount to use.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      serviceAccount: my-service-account
+      containers:
+        - name: my-container
+          image: nginx
+
+serviceAccountName:
+  description: [Deprecated, use serviceAccount] Specifies the service account to use for the Pod.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      serviceAccountName: my-service-account
+      containers:
+        - name: my-container
+          image: nginx
+
+setHostnameAsFQDN:
+  description: If true, sets the Pod hostname to its fully qualified domain name (FQDN).
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      setHostnameAsFQDN: true
+      containers:
+        - name: my-container
+          image: nginx
+
+shareProcessNamespace:
+  description: If true, enables containers in the Pod to share a single process namespace (see each other's processes).
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      shareProcessNamespace: true
+      containers:
+        - name: my-container
+          image: nginx
+
+subdomain:
+  description: Sets the Pod subdomain for DNS hostname construction.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      subdomain: my-subdomain
+      containers:
+        - name: my-container
+          image: nginx
+
+terminationGracePeriodSeconds:
+  description: Time (in seconds) to wait before forcefully killing containers after Pod deletion.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: my-container
+          image: nginx
+
+tolerations:
+  description: List of node taints this Pod will tolerate for scheduling.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: gpu
+          effect: NoSchedule
+      containers:
+        - name: my-container
+          image: nginx
+
+topologySpreadConstraints:
+  description: Controls how Pods are spread across topology domains (like zones or nodes).
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: my-app
       containers:
         - name: my-container
           image: nginx
@@ -340,238 +595,3 @@ volumes:
               name: config-volume
             - mountPath: /etc/secret
               name: secret-volume
-
-nodeName:
-  description: Schedules the Pod onto the node with this name.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      nodeName: worker-node-1
-      containers:
-        - name: my-container
-          image: nginx
-
-priorityClassName:
-  description: Assigns a priority class to the Pod for scheduling and eviction.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      priorityClassName: high-priority
-      containers:
-        - name: my-container
-          image: nginx
-
-preemptionPolicy:
-  description: Specifies the Pod's preemption policy. Allowed values: PreemptLowerPriority, Never.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      preemptionPolicy: PreemptLowerPriority
-      containers:
-        - name: my-container
-          image: nginx
-
-schedulerName:
-  description: Name of the scheduler to dispatch this Pod, defaults to "default-scheduler".
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      schedulerName: custom-scheduler
-      containers:
-        - name: my-container
-          image: nginx
-
-terminationGracePeriodSeconds:
-  description: Time (in seconds) to wait before forcefully killing containers after Pod deletion.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      terminationGracePeriodSeconds: 60
-      containers:
-        - name: my-container
-          image: nginx
-
-hostAliases:
-  description: Custom host-to-IP mappings injected into the Pod's /etc/hosts file.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      hostAliases:
-        - ip: "127.0.0.1"
-          hostnames:
-            - "local.dev"
-            - "test.dev"
-      containers:
-        - name: my-container
-          image: nginx
-
-readinessGates:
-  description: List of additional conditions for Pod readiness, for integrating custom controllers.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      readinessGates:
-        - conditionType: "example.com/CustomReady"
-      containers:
-        - name: my-container
-          image: nginx
-
-os:
-  description: Specify the operating system for the Pod, e.g., linux or windows.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      os:
-        name: linux
-      containers:
-        - name: my-container
-          image: nginx
-
-overhead:
-  description: Resource overhead associated with running a Pod (set by the RuntimeClass).
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      overhead:
-        cpu: "100m"
-        memory: "50Mi"
-      containers:
-        - name: my-container
-          image: nginx
-
-subdomain:
-  description: Sets the Pod subdomain for DNS hostname construction.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      subdomain: my-subdomain
-      containers:
-        - name: my-container
-          image: nginx
-
-hostname:
-  description: Sets the Pod's hostname in the cluster.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      hostname: custom-host
-      containers:
-        - name: my-container
-          image: nginx
-
-shareProcessNamespace:
-  description: If true, enables containers in the Pod to share a single process namespace (see each other's processes).
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      shareProcessNamespace: true
-      containers:
-        - name: my-container
-          image: nginx
-
-setHostnameAsFQDN:
-  description: If true, sets the Pod hostname to its fully qualified domain name (FQDN).
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      setHostnameAsFQDN: true
-      containers:
-        - name: my-container
-          image: nginx
-
-topologySpreadConstraints:
-  description: Controls how Pods are spread across topology domains (like zones or nodes).
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      topologySpreadConstraints:
-        - maxSkew: 1
-          topologyKey: topology.kubernetes.io/zone
-          whenUnsatisfiable: DoNotSchedule
-          labelSelector:
-            matchLabels:
-              app: my-app
-      containers:
-        - name: my-container
-          image: nginx
-
-activeDeadlineSeconds:
-  description: The duration in seconds the Pod may be active before the system tries to terminate it.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      activeDeadlineSeconds: 3600
-      containers:
-        - name: my-container
-          image: nginx
-
-runtimeClassName:
-  description: Specifies the container runtime class for the Pod (e.g., for using gVisor or Kata).
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      runtimeClassName: kata-containers
-      containers:
-        - name: my-container
-          image: nginx
-
-enableServiceLinks:
-  description: Controls whether environment variables for services are injected into the Pod.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      enableServiceLinks: false
-      containers:
-        - name: my-container
-          image: nginx
