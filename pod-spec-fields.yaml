@@ -12,7 +12,7 @@ activeDeadlineSeconds:
           image: nginx
 
 affinity:
-  description: Node/pod affinity and anti-affinity scheduling rules.
+  description: Node/pod affinity and anti-affinity scheduling rules for the Pod.
   sample: |
     apiVersion: v1
     kind: Pod
@@ -26,22 +26,7 @@ affinity:
               - matchExpressions:
                   - key: disktype
                     operator: In
-                    values:
-                      - ssd
-        podAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchLabels:
-                  app: web
-              topologyKey: kubernetes.io/hostname
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    app: web
-                topologyKey: kubernetes.io/hostname
+                    values: [ssd]
       containers:
         - name: my-container
           image: nginx
@@ -75,22 +60,6 @@ containers:
           env:
             - name: ENVIRONMENT
               value: "production"
-          resources:
-            requests:
-              memory: "64Mi"
-              cpu: "250m"
-            limits:
-              memory: "128Mi"
-              cpu: "500m"
-          livenessProbe:
-            httpGet:
-              path: /
-              port: 80
-            initialDelaySeconds: 3
-            periodSeconds: 5
-        - name: busybox
-          image: busybox
-          command: ["sleep", "3600"]
 
 dnsConfig:
   description: Custom DNS configuration for the Pod, overrides some DNSPolicy defaults.
@@ -101,10 +70,8 @@ dnsConfig:
       name: my-pod
     spec:
       dnsConfig:
-        nameservers:
-          - 1.1.1.1
-        searches:
-          - custom.svc.cluster.local
+        nameservers: [1.1.1.1]
+        searches: [custom.svc.cluster.local]
         options:
           - name: ndots
             value: "2"
@@ -164,9 +131,7 @@ hostAliases:
     spec:
       hostAliases:
         - ip: "127.0.0.1"
-          hostnames:
-            - "local.dev"
-            - "test.dev"
+          hostnames: ["local.dev", "test.dev"]
       containers:
         - name: my-container
           image: nginx
@@ -251,38 +216,6 @@ initContainers:
           command: ["sh", "-c", "echo Initializing; sleep 5"]
       containers:
         - name: main
-          image: nginx
-
-labels:
-  description: Key-value pairs for organizing and selecting the Pod; used for selectors, grouping, and searching.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-      labels:
-        app: web
-        tier: backend
-    spec:
-      containers:
-        - name: my-container
-          image: nginx
-
-metadata:
-  description: Standard object's metadata; includes name, namespace, labels, annotations, etc.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-      namespace: my-namespace
-      labels:
-        app: my-app
-      annotations:
-        description: "test pod"
-    spec:
-      containers:
-        - name: my-container
           image: nginx
 
 nodeName:
@@ -449,21 +382,8 @@ securityContext:
         - name: my-container
           image: nginx
 
-serviceAccount:
-  description: Name of the ServiceAccount to use.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      serviceAccount: my-service-account
-      containers:
-        - name: my-container
-          image: nginx
-
 serviceAccountName:
-  description: [Deprecated, use serviceAccount] Specifies the service account to use for the Pod.
+  description: Specifies the service account to use for the Pod.
   sample: |
     apiVersion: v1
     kind: Pod
