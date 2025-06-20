@@ -54,6 +54,19 @@ serviceAccountName:
         - name: my-container
           image: nginx
 
+automountServiceAccountToken:
+  description: Controls whether a service account token is automatically mounted for the Pod.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: my-container
+          image: nginx
+
 restartPolicy:
   description: Controls the restart behavior of containers in the Pod. Allowed values: Always, OnFailure, Never.
   sample: |
@@ -99,6 +112,15 @@ affinity:
                     operator: In
                     values:
                       - ssd
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: security
+                    operator: In
+                    values:
+                      - S1
+              topologyKey: failure-domain.beta.kubernetes.io/zone
       containers:
         - name: my-container
           image: nginx
@@ -129,6 +151,32 @@ hostNetwork:
       name: my-pod
     spec:
       hostNetwork: true
+      containers:
+        - name: my-container
+          image: nginx
+
+hostPID:
+  description: If true, use the host’s process namespace.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      hostPID: true
+      containers:
+        - name: my-container
+          image: nginx
+
+hostIPC:
+  description: If true, use the host’s IPC namespace.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      hostIPC: true
       containers:
         - name: my-container
           image: nginx
@@ -208,6 +256,22 @@ containers:
           image: nginx:1.24.0
           ports:
             - containerPort: 80
+          env:
+            - name: ENVIRONMENT
+              value: "production"
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "250m"
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 5
         - name: busybox
           image: busybox
           command: ["sleep", "3600"]
@@ -256,14 +320,26 @@ volumes:
         - name: config-volume
           configMap:
             name: my-config
+        - name: secret-volume
+          secret:
+            secretName: my-secret
         - name: empty-volume
           emptyDir: {}
+        - name: hostpath-volume
+          hostPath:
+            path: /data
+            type: Directory
+        - name: pvc-volume
+          persistentVolumeClaim:
+            claimName: my-pvc
       containers:
         - name: main
           image: nginx
           volumeMounts:
             - mountPath: /etc/config
               name: config-volume
+            - mountPath: /etc/secret
+              name: secret-volume
 
 nodeName:
   description: Schedules the Pod onto the node with this name.
@@ -287,6 +363,19 @@ priorityClassName:
       name: my-pod
     spec:
       priorityClassName: high-priority
+      containers:
+        - name: my-container
+          image: nginx
+
+preemptionPolicy:
+  description: Specifies the Pod's preemption policy. Allowed values: PreemptLowerPriority, Never.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      preemptionPolicy: PreemptLowerPriority
       containers:
         - name: my-container
           image: nginx
@@ -461,19 +550,6 @@ activeDeadlineSeconds:
         - name: my-container
           image: nginx
 
-preemptionPolicy:
-  description: Specifies the Pod's preemption policy. Allowed values: PreemptLowerPriority, Never.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      preemptionPolicy: PreemptLowerPriority
-      containers:
-        - name: my-container
-          image: nginx
-
 runtimeClassName:
   description: Specifies the container runtime class for the Pod (e.g., for using gVisor or Kata).
   sample: |
@@ -483,19 +559,6 @@ runtimeClassName:
       name: my-pod
     spec:
       runtimeClassName: kata-containers
-      containers:
-        - name: my-container
-          image: nginx
-
-automountServiceAccountToken:
-  description: Controls whether a service account token is automatically mounted for the Pod.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      automountServiceAccountToken: false
       containers:
         - name: my-container
           image: nginx
