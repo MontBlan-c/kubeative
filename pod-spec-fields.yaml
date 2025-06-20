@@ -5,14 +5,14 @@ namespace:
     kind: Pod
     metadata:
       name: my-pod
-      namespace: my-namespace
+      namespace: custom-namespace
     spec:
       containers:
         - name: my-container
           image: nginx
 
 labels:
-  description: Key-value pairs for organizing and selecting the Pod; used for selectors and grouping.
+  description: Key-value pairs for organizing and selecting the Pod; used for selectors, grouping, and searching.
   sample: |
     apiVersion: v1
     kind: Pod
@@ -27,7 +27,7 @@ labels:
           image: nginx
 
 annotations:
-  description: Arbitrary key-value metadata for a Pod; used by tools and libraries for custom information.
+  description: Arbitrary key-value metadata for a Pod; used by tools and libraries for custom info.
   sample: |
     apiVersion: v1
     kind: Pod
@@ -83,7 +83,7 @@ nodeSelector:
           image: nginx
 
 affinity:
-  description: Advanced node affinity and anti-affinity rules for pod scheduling.
+  description: Advanced node/pod affinity and anti-affinity rules for pod scheduling.
   sample: |
     apiVersion: v1
     kind: Pod
@@ -142,6 +142,26 @@ dnsPolicy:
       name: my-pod
     spec:
       dnsPolicy: ClusterFirst
+      containers:
+        - name: my-container
+          image: nginx
+
+dnsConfig:
+  description: Custom DNS configuration for the Pod, overrides some DNSPolicy defaults.
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      dnsConfig:
+        nameservers:
+          - 1.1.1.1
+        searches:
+          - custom.svc.cluster.local
+        options:
+          - name: ndots
+            value: "2"
       containers:
         - name: my-container
           image: nginx
@@ -206,6 +226,22 @@ initContainers:
           command: ["sh", "-c", "echo Initializing; sleep 5"]
       containers:
         - name: main
+          image: nginx
+
+ephemeralContainers:
+  description: Temporary containers used for troubleshooting running Pods (not restarted with the Pod).
+  sample: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: my-pod
+    spec:
+      ephemeralContainers:
+        - name: debugger
+          image: busybox
+          command: ["sh"]
+      containers:
+        - name: my-container
           image: nginx
 
 volumes:
@@ -367,22 +403,6 @@ hostname:
         - name: my-container
           image: nginx
 
-ephemeralContainers:
-  description: Temporary containers used for troubleshooting running Pods (not restarted with the Pod).
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      ephemeralContainers:
-        - name: debugger
-          image: busybox
-          command: ["sh"]
-      containers:
-        - name: my-container
-          image: nginx
-
 shareProcessNamespace:
   description: If true, enables containers in the Pod to share a single process namespace (see each other's processes).
   sample: |
@@ -405,26 +425,6 @@ setHostnameAsFQDN:
       name: my-pod
     spec:
       setHostnameAsFQDN: true
-      containers:
-        - name: my-container
-          image: nginx
-
-dnsConfig:
-  description: Custom DNS configuration for the Pod, overrides some DNSPolicy defaults.
-  sample: |
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: my-pod
-    spec:
-      dnsConfig:
-        nameservers:
-          - 1.1.1.1
-        searches:
-          - custom.svc.cluster.local
-        options:
-          - name: ndots
-            value: "2"
       containers:
         - name: my-container
           image: nginx
